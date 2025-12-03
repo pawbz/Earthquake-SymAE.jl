@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.21
+# v0.20.9
 
 using Markdown
 using InteractiveUtils
@@ -28,8 +28,24 @@ using Healpix
 # ╔═╡ 48f55ae6-aff5-4287-8c62-bc83b98ae50f
 @__DIR__
 
-# ╔═╡ 3f59df4a-57d8-4368-9ad7-0ed3c9dbde1b
-eqfiles = [h5open(joinpath(@__DIR__, "deep_EQs_dataP.hdf5"), "r")]
+# ╔═╡ 3dbf0176-2c64-11ef-01a3-e77e62dbf93b
+begin
+	eqfiles = [
+        # h5open(joinpath(@__DIR__, "new_20_syn_P.hdf5"), "r"),
+        # h5open(joinpath(@__DIR__, "pbseq.hdf5"), "r"),
+		h5open(joinpath("/home/pawan/Notebooks/","deep_EQS_P_1.hdf5"), "r"),
+        # h5open(joinpath("/mnt/NAS/EQData/Deep-Earthquakes/","deep_EQS_pP.hdf5"), "r"),
+    ]
+    eqfilesS = [
+        # h5open(joinpath(@__DIR__, "new_20_syn_P.hdf5"), "r"),
+        # h5open(joinpath(@__DIR__, "pbseq.hdf5"), "r"),
+		# h5open(joinpath("/home/pawan/Notebooks/","deep_EQS_P_1.hdf5"), "r"),
+        h5open(joinpath("/mnt/NAS/EQData/Deep-Earthquakes/","deep_EQS_pP.hdf5"), "r"),
+    ]
+    # eqfilesS=[h5open("S_dataset_40eq.hdf5", "r")
+    # ]
+    # h5open("1.0_Preprocessed_Data/eq_all_P.hdf5", "r"),h5open("1.0_Preprocessed_Data/japan_finiteP.hdf5", "r"),h5open("1.0_Preprocessed_Data/pbseq.hdf5", "r"),h5open("1.0_Preprocessed_Data/hindukush_finiteP.hdf5", "r"),h5open("1.0_Preprocessed_Data/fiji_finiteP.hdf5", "r"),h5open("1.0_Preprocessed_Data/sumatra_finite.hdf5", "r"),h5open("1.0_Preprocessed_Data/eq_pb2.hdf5", "r")];
+end
 
 # ╔═╡ 59e929f0-9403-4ba7-baa9-7d603c07fd9f
 nr_min_pixel = 20
@@ -54,6 +70,44 @@ end
 
 # ╔═╡ 9061c885-5f5a-4279-8140-980a2958f08f
 plot(taper(randn(128)))
+
+# ╔═╡ ce1b1918-8e01-4fed-aa4b-dc216ce832df
+begin  ## S pixel wise
+    SDeq_train_pixel = []
+    SDeq_train_stn_pixel = []
+    SDeq_test_stn_pixel = []
+    SDeq_test_pixel = []
+    SDeqnames_pixel = []
+    for eqfile in eqfilesS
+        map(keys(eqfile)) do eq
+            map(keys(eqfile[eq])) do pixel
+                stn_names = keys(eqfile[eq][pixel])
+                data = mapreduce(hcat, stn_names) do stn
+                    return Float32.(Array(eqfile[eq][pixel][stn])[:])
+                end
+
+                # minimum number of stations 
+                if (size(data, 2) > nr_min_pixel)
+					d = data
+                    # d = taper(d)
+					# d = resample(d, 0.5, dims=1)
+					d = d[101:300, :]
+					d = Float32.(d)
+                    # d = normalise(d, dims = 1)
+					d = taper(d, 1)
+					d = normalise(d, dims = 1)
+					Random.seed!(1234)
+                    D1, D2 = splitobs((d, stn_names), at = (0.9), shuffle = true)
+                    push!(SDeq_train_pixel, getobs(D1[1]))
+                    push!(SDeq_train_stn_pixel, getobs(D1[2]))
+                    push!(SDeq_test_pixel, getobs(D2[1]))
+                    push!(SDeq_test_stn_pixel, getobs(D2[2]))
+                    push!(SDeqnames_pixel, string(eq, "_", pixel))
+                end
+            end
+        end
+    end
+end
 
 # ╔═╡ 177beb36-b0a2-4a2e-90f4-c097e42a046c
 begin  ## pixel wise
@@ -92,6 +146,53 @@ begin  ## pixel wise
     end
 end
 
+# ╔═╡ 7832dbde-9c46-41f1-b216-52348a728bf0
+# ╠═╡ disabled = true
+#=╠═╡
+begin # one state for each earthquake
+    Deq_train = []
+    Deq_train_stn = []
+    Deq_test_stn = []
+    Deq_test = []
+    Deqnames = []
+    for eqfile in eqfiles
+        map(keys(eqfile)) do eq
+            eqdata=map(keys(eqfile[eq])) do pixel
+                stn_names = keys(eqfile[eq][pixel])
+                data = mapreduce(hcat, stn_names) do stn
+                    return Float32.(Array(eqfile[eq][pixel][stn])[1:400])
+                end
+
+                # minimum number of stations 
+            
+					d = data
+                    d = taper(d)
+					d = d[101:300, :]
+					d = Float32.(d)
+                    d = normalise(d, dims = 1)
+					d = taper(d)
+                   return (d, stn_names)
+                end
+			
+			D = cat(first.(eqdata)..., dims=2)
+			stn_names = vcat(last.(eqdata)...)
+			
+			 D1, D2 = splitobs((D, stn_names), at = (0.9), shuffle = true)
+                    push!(Deq_train, getobs(D1[1]))
+                    push!(Deq_train_stn, getobs(D1[2]))
+                    push!(Deq_test, getobs(D2[1]))
+                    push!(Deq_test_stn, getobs(D2[2]))
+                    push!(Deqnames, string(eq))
+        
+    end
+
+end
+end
+  ╠═╡ =#
+
+# ╔═╡ d071b103-1293-4a07-8f82-5b5436148270
+# plot(mean(envelope((Sdata_pixel.Dtrain[findalleq("okt5_14", Sdata_pixel)])), dims=2))
+
 # ╔═╡ eae96983-5a43-4b4f-82f0-aeccd6b57ac5
 function findalleq(eq, data)
 	first(findall(x -> occursin(eq, x), data.Dnames))
@@ -102,6 +203,24 @@ envelope(x) = abs.(hilbert(x))
 
 # ╔═╡ aeb47fa8-d125-49a6-b92a-7051d3e61fd4
 
+
+# ╔═╡ f45cd343-86e2-446d-822d-5f66d31067fd
+data_pixel_all = (;
+    Dtrain = vcat(Deq_train_pixel, SDeq_train_pixel),
+    Dtest = vcat(Deq_test_pixel, SDeq_test_pixel),
+    Deq_train_stn = vcat(Deq_train_stn_pixel, SDeq_train_stn_pixel),
+    Deq_test_stn = vcat(Deq_test_stn_pixel, SDeq_test_stn_pixel),
+    Dnames = vcat(Deqnames_pixel, SDeqnames_pixel),
+);
+
+# ╔═╡ e2618849-145d-41ad-a335-09aebb9dead9
+data_pixel_pP = (;
+    Dtrain = SDeq_train_pixel,
+    Dtest = SDeq_test_pixel,
+    Deq_train_stn = SDeq_train_stn_pixel,
+    Deq_test_stn = SDeq_test_stn_pixel,
+    Dnames = SDeqnames_pixel,
+);
 
 # ╔═╡ 41b82236-fd5b-441f-aa92-3a2852582e63
 #=╠═╡
@@ -217,35 +336,6 @@ data_pixel.Dnames
 # ╔═╡ 30c7da7b-3bbc-49bd-a505-23b4de93b5be
 kidx_okt1 = (findall(x -> occursin("20130524_054448", x), data_pixel.Dnames))
 
-# ╔═╡ 8b544a49-4970-46ae-8992-93a7a06d8076
-function plot_data(
-    d;
-    title = "",
-    labels = fill(nothing, length(d)),
-    ylims = (-8, 8),
-    opacitys = fill(1, length(d)),
-        tgrid=range(-50, 200, length = 256)
-)
-
-    trace = [
-        PlutoPlotly.scatter(
-            x = tgrid,
-            y = Array(dd),
-            mode = "lines",
-            name = label,
-            opacity = opacity,
-        ) for (dd, label, opacity) in zip(Array(d), labels, opacitys)
-    ]
-    layout = Layout(
-        title = title,
-        legend = attr(x = 0, y = -0.25, traceorder = "normal", orientation = "h"),
-        yaxis = attr(range = ylims, gridwidth = 1),
-        xaxis = attr(title = "time"),
-        height = 400,
-    )
-    PlutoPlotly.plot(trace, layout)
-end
-
 # ╔═╡ b102c00f-9444-4aa2-91e0-2992da4a5f44
 let
     resample_eq_data
@@ -263,6 +353,44 @@ let
     )
 end
 
+# ╔═╡ 5e7754da-1bbd-4309-aa86-231f39b51e74
+let
+    resample_eq_data
+    i = randobs(findall(x -> occursin(resample_eq_data_name, x), SDeqnames_pixel))
+    eq, eqname = data_pixel_pP.Dtrain[i], data_pixel_pP.Dnames[i]
+    eqstn = data_pixel_pP.Deq_train_stn[i]
+    dplot, dplotnames = randobs((eq, eqstn), 3)
+    plot_data(
+        unstack(dplot, dims = 2),
+        labels = dplotnames,
+        title = "Sample Data: $(eqname)",
+        opacitys = [1, 1, 0.5, 0.5],
+		tgrid =tgrid
+    )
+end
+
+# ╔═╡ 2184693e-7a32-460d-951c-c79c4d0466a8
+#=╠═╡
+size(data.Dtrain[1])
+  ╠═╡ =#
+
+# ╔═╡ 98c005d2-046e-4bdc-b18c-840bc85dba9e
+# eq_list = map(event_list["Name"], event_list["Code"]) do eq, code
+#     list1 = eq, code
+# end
+
+# ╔═╡ c96154ad-f4f8-4329-8f2d-dd5e84e082da
+# phase = [h5open("1.1_Phase_time.hdf5", "r")];
+
+# ╔═╡ 391e5dce-6d81-454c-ad4a-202399aa02f5
+# begin
+#     pP = Array(phase[1]["fij1"]["pP"])
+#     sP = Array(phase[1]["fij1"]["sP"])
+# end
+
+# ╔═╡ b27ade4d-96f1-4329-8721-2f25b82255b6
+# event_list= CSV.File("events_list40.csv")
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -275,28 +403,27 @@ PlutoHooks = "0ff47ea0-7a50-410d-8455-4348d5de0774"
 PlutoLinks = "0ff47ea0-7a50-410d-8455-4348d5de0420"
 PlutoPlotly = "8e989ff0-3d88-8e9f-f020-2b208a939ff0"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
-Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
-DSP = "~0.7.10"
+DSP = "~0.7.9"
 HDF5 = "~0.17.2"
 Healpix = "~4.2.2"
 MLUtils = "~0.4.4"
 PlutoHooks = "~0.0.5"
 PlutoLinks = "~0.1.6"
 PlutoPlotly = "~0.4.6"
-PlutoUI = "~0.7.60"
-StatsBase = "~0.34.4"
+PlutoUI = "~0.7.59"
+StatsBase = "~0.34.3"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.12.1"
+julia_version = "1.11.2"
 manifest_format = "2.0"
-project_hash = "06e18209bb2ced70d81a12f2ece55e84af56fa56"
+project_hash = "190693e4d85a18bb0ef4433f892b7a97dcb6191c"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -490,7 +617,7 @@ weakdeps = ["Dates", "LinearAlgebra"]
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "1.3.0+1"
+version = "1.1.1+0"
 
 [[deps.CompositionsBase]]
 git-tree-sha1 = "802bb88cd69dfd1509f6670416bd4434015693ad"
@@ -728,11 +855,6 @@ git-tree-sha1 = "10da5154188682e5c0726823c2b5125957ec3778"
 uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
 version = "0.9.38"
 
-[[deps.JuliaSyntaxHighlighting]]
-deps = ["StyledStrings"]
-uuid = "ac6e5ff7-fb65-4e79-a425-ec3bc9c03011"
-version = "1.12.0"
-
 [[deps.JuliaVariables]]
 deps = ["MLStyle", "NameResolution"]
 git-tree-sha1 = "49fb3cb53362ddadb4415e9b73926d6b40709e70"
@@ -777,24 +899,24 @@ uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
 version = "0.6.4"
 
 [[deps.LibCURL_jll]]
-deps = ["Artifacts", "LibSSH2_jll", "Libdl", "OpenSSL_jll", "Zlib_jll", "nghttp2_jll"]
+deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
-version = "8.11.1+1"
+version = "8.6.0+0"
 
 [[deps.LibGit2]]
-deps = ["LibGit2_jll", "NetworkOptions", "Printf", "SHA"]
+deps = ["Base64", "LibGit2_jll", "NetworkOptions", "Printf", "SHA"]
 uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 version = "1.11.0"
 
 [[deps.LibGit2_jll]]
-deps = ["Artifacts", "LibSSH2_jll", "Libdl", "OpenSSL_jll"]
+deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll"]
 uuid = "e37daf67-58a4-590a-8e99-b0245dd2ffc5"
-version = "1.9.0+0"
+version = "1.7.2+0"
 
 [[deps.LibSSH2_jll]]
-deps = ["Artifacts", "Libdl", "OpenSSL_jll"]
+deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
 uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
-version = "1.11.3+1"
+version = "1.11.0+1"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -809,7 +931,7 @@ version = "0.2.0"
 [[deps.LinearAlgebra]]
 deps = ["Libdl", "OpenBLAS_jll", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-version = "1.12.0"
+version = "1.11.0"
 
 [[deps.LogExpFunctions]]
 deps = ["DocStringExtensions", "IrrationalConstants", "LinearAlgebra"]
@@ -884,9 +1006,14 @@ uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
 version = "0.5.13"
 
 [[deps.Markdown]]
-deps = ["Base64", "JuliaSyntaxHighlighting", "StyledStrings"]
+deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 version = "1.11.0"
+
+[[deps.MbedTLS_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
+version = "2.28.6+0"
 
 [[deps.MicroCollections]]
 deps = ["Accessors", "BangBang", "InitialValues"]
@@ -912,7 +1039,7 @@ version = "1.11.0"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
-version = "2025.5.20"
+version = "2023.12.12"
 
 [[deps.NNlib]]
 deps = ["Adapt", "Atomix", "ChainRulesCore", "GPUArraysCore", "KernelAbstractions", "LinearAlgebra", "Random", "Statistics"]
@@ -944,17 +1071,17 @@ version = "0.1.5"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
-version = "1.3.0"
+version = "1.2.0"
 
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
-version = "0.3.29+0"
+version = "0.3.27+1"
 
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.8.7+0"
+version = "0.8.1+2"
 
 [[deps.OpenMPI_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "MPIPreferences", "TOML"]
@@ -963,9 +1090,10 @@ uuid = "fe0851c0-eecd-5654-98d4-656369965a5c"
 version = "4.1.6+0"
 
 [[deps.OpenSSL_jll]]
-deps = ["Artifacts", "Libdl"]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "7493f61f55a6cce7325f197443aa80d32554ba10"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "3.5.1+0"
+version = "3.0.15+3"
 
 [[deps.OpenSpecFun_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl"]
@@ -993,7 +1121,7 @@ version = "2.8.1"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "Random", "SHA", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-version = "1.12.0"
+version = "1.11.0"
 weakdeps = ["REPL"]
 
     [deps.Pkg.extensions]
@@ -1083,7 +1211,7 @@ uuid = "43287f4e-b6f4-7ad1-bb20-aadabca52c3d"
 version = "1.2.1"
 
 [[deps.REPL]]
-deps = ["InteractiveUtils", "JuliaSyntaxHighlighting", "Markdown", "Sockets", "StyledStrings", "Unicode"]
+deps = ["InteractiveUtils", "Markdown", "Sockets", "StyledStrings", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 version = "1.11.0"
 
@@ -1157,7 +1285,7 @@ version = "1.2.1"
 [[deps.SparseArrays]]
 deps = ["Libdl", "LinearAlgebra", "Random", "Serialization", "SuiteSparse_jll"]
 uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
-version = "1.12.0"
+version = "1.11.0"
 
 [[deps.SpecialFunctions]]
 deps = ["IrrationalConstants", "LogExpFunctions", "OpenLibm_jll", "OpenSpecFun_jll"]
@@ -1220,7 +1348,7 @@ version = "1.11.0"
 [[deps.SuiteSparse_jll]]
 deps = ["Artifacts", "Libdl", "libblastrampoline_jll"]
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
-version = "7.8.3+2"
+version = "7.7.0+0"
 
 [[deps.TOML]]
 deps = ["Dates"]
@@ -1315,7 +1443,7 @@ version = "0.3.0"
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
-version = "1.3.1+2"
+version = "1.2.13+1"
 
 [[deps.libaec_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -1326,7 +1454,7 @@ version = "1.1.2+2"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "5.15.0+0"
+version = "5.11.0+0"
 
 [[deps.libsharp2_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "LLVMOpenMP_jll", "Libdl", "Pkg"]
@@ -1337,7 +1465,7 @@ version = "1.0.2+2"
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
-version = "1.64.0+1"
+version = "1.59.0+0"
 
 [[deps.oneTBB_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -1348,28 +1476,34 @@ version = "2021.12.0+0"
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
-version = "17.5.0+2"
+version = "17.4.0+2"
 """
 
 # ╔═╡ Cell order:
 # ╠═0d6e4ef8-bbcf-444b-9649-9d75944585c1
 # ╠═7e457cff-4f26-47f8-a22d-12c4e563083a
 # ╠═a34941e8-32ea-445f-8300-c9a9e3632efe
+# ╠═49d2c89e-b634-44c7-b0c6-aba330a8c6d9
 # ╠═48f55ae6-aff5-4287-8c62-bc83b98ae50f
-# ╠═3f59df4a-57d8-4368-9ad7-0ed3c9dbde1b
+# ╠═3dbf0176-2c64-11ef-01a3-e77e62dbf93b
 # ╠═59e929f0-9403-4ba7-baa9-7d603c07fd9f
 # ╠═b6d2d61e-f8be-41c4-a7ad-dfd688846120
 # ╠═1be08651-2356-4aba-8f3d-a1ee72835d1f
 # ╠═b400589b-bbf9-4126-a9a4-434d7465a60e
 # ╠═818a2774-9cf4-4e9e-98fe-c258cb6dd451
 # ╠═9061c885-5f5a-4279-8140-980a2958f08f
+# ╠═ce1b1918-8e01-4fed-aa4b-dc216ce832df
 # ╠═177beb36-b0a2-4a2e-90f4-c097e42a046c
+# ╠═7832dbde-9c46-41f1-b216-52348a728bf0
 # ╠═daace6f5-5e9a-4aca-adb2-8f4c4acfe1ae
+# ╠═d071b103-1293-4a07-8f82-5b5436148270
 # ╠═eae96983-5a43-4b4f-82f0-aeccd6b57ac5
 # ╠═e5eaf9b7-bda0-4987-9043-affee18c9268
 # ╠═b05e2464-ac21-4aa5-95a6-362ea05fc7ae
 # ╠═aeb47fa8-d125-49a6-b92a-7051d3e61fd4
 # ╠═23d7627a-c041-432e-91b0-4c66987c5ce3
+# ╠═f45cd343-86e2-446d-822d-5f66d31067fd
+# ╠═e2618849-145d-41ad-a335-09aebb9dead9
 # ╠═41b82236-fd5b-441f-aa92-3a2852582e63
 # ╠═2e720de5-339d-40aa-a30a-67f39c36f1e8
 # ╠═34365606-c3a5-4196-8f0f-24a365584d54
@@ -1383,6 +1517,11 @@ version = "17.5.0+2"
 # ╠═55fa5379-00cb-4895-9fc2-9759193200f2
 # ╠═30c7da7b-3bbc-49bd-a505-23b4de93b5be
 # ╠═b102c00f-9444-4aa2-91e0-2992da4a5f44
-# ╠═8b544a49-4970-46ae-8992-93a7a06d8076
+# ╠═5e7754da-1bbd-4309-aa86-231f39b51e74
+# ╠═2184693e-7a32-460d-951c-c79c4d0466a8
+# ╠═98c005d2-046e-4bdc-b18c-840bc85dba9e
+# ╠═c96154ad-f4f8-4329-8f2d-dd5e84e082da
+# ╠═391e5dce-6d81-454c-ad4a-202399aa02f5
+# ╠═b27ade4d-96f1-4329-8721-2f25b82255b6
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
